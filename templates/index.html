@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SMS Spam Classifier</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(to right, #f0f2f5, #c9d6ff);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 2rem;
+            position: relative;
+            padding-left: 60px;
+        }
+        h1::before {
+            content: url('https://img.icons8.com/color/48/sms.png');
+            position: absolute;
+            left: 20px;
+            top: 30%;
+            transform: translateY(-50%);
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            background-color: #fdfefe;
+        }
+        button {
+            background: linear-gradient(to right, #36d1dc, #5b86e5);
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        button:hover {
+            background: linear-gradient(to right, #3498db, #2ecc71);
+        }
+        .result {
+            text-align: center;
+            font-weight: bold;
+            font-size: 20px;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .result.spam {
+            background-color: #ffe6e6;
+            color: #e74c3c;
+        }
+        .result.ham {
+            background-color: #e6ffe6;
+            color: #27ae60;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: #fdfefe;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(to right, #6a11cb, #2575fc);
+            color: white;
+        }
+        tr:hover {
+            background-color: #f1f9ff;
+        }
+        td.spam::before {
+            content: url('https://img.icons8.com/color/24/error--v1.png');
+            margin-right: 8px;
+        }
+        td.ham::before {
+            content: url('https://img.icons8.com/color/24/checkmark--v1.png');
+            margin-right: 8px;
+        }
+        td.spam {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        td.ham {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                gap: 20px;
+            }
+            textarea, button {
+                font-size: 14px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SMS Spam Classifier</h1>
+
+        <div class="result" id="result"></div>
+
+        <form id="smsForm">
+            <textarea id="messageInput" placeholder="Enter your SMS message here..." required></textarea>
+            <button type="submit">Classify</button>
+        </form>
+
+        <button id="clearHistoryBtn" style="background: #e74c3c; margin-top: 10px;">Clear History</button>
+
+        <table id="messagesTable" aria-label="Recent messages and predictions">
+            <thead>
+                <tr>
+                    <th>Message</th>
+                    <th>Prediction</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Recent messages will be populated here -->
+            </tbody>
+        </table>
+    </div>
+    <script>
+        async function fetchMessages() {
+            const response = await fetch('/messages');
+            const messages = await response.json();
+            const tbody = document.querySelector('#messagesTable tbody');
+            tbody.innerHTML = '';
+            messages.forEach(msg => {
+                const tr = document.createElement('tr');
+                const tdMessage = document.createElement('td');
+                tdMessage.textContent = msg.message;
+                const tdPrediction = document.createElement('td');
+                tdPrediction.textContent = msg.prediction;
+                tdPrediction.className = msg.prediction === 'spam' ? 'spam' : 'ham';
+                tr.appendChild(tdMessage);
+                tr.appendChild(tdPrediction);
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('smsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = document.getElementById('messageInput').value.trim();
+            if (!message) {
+                alert('Please enter a message.');
+                return;
+            }
+            const response = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+            const data = await response.json();
+            const resultDiv = document.getElementById('result');
+            if (response.ok) {
+                resultDiv.textContent = `Prediction: ${data.prediction}`;
+                resultDiv.className = data.prediction === 'spam' ? 'result spam' : 'result ham';
+                fetchMessages();
+            } else {
+                resultDiv.textContent = `Error: ${data.error}`;
+                resultDiv.className = 'result';
+            }
+        });
+
+        document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to clear all previous messages?')) {
+                return;
+            }
+            const response = await fetch('/clear_messages', {
+                method: 'POST'
+            });
+            const data = await response.json();
+            alert(data.message);
+            fetchMessages();
+            document.getElementById('result').textContent = '';
+        });
+
+        // Initial load of recent messages
+        fetchMessages();
+    </script>
+</body>
+</html>
