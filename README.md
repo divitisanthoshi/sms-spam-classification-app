@@ -2,7 +2,7 @@
 
 This repository contains the source code for the SMS Spam Classification application.
 
-## Live Demo
+## Model
 
 You can access the live deployed app on Heroku at:
 
@@ -26,7 +26,3 @@ The app is deployed on Heroku with PostgreSQL as the database.
 ## Usage
 
 Clone the repository and run the Flask app locally or use the live demo link above.
-
-## License
-
-MIT License
