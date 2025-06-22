@@ -33,9 +33,21 @@ sample_messages = [
     "URGENT! You have won a 1 week FREE membership in our £100,000 Prize Jackpot!",
     "I'll call you later when I get home.",
     "Alert..!! your acount has been hacked",
-    "Alert..!! your a/c has been hacked.. Click on this link for more details..."
+    "Alert..!! your a/c has been hacked.. Click on this link for more details...",
+    # Added ham greetings
+    "hi",
+    "hai",
+    "hy",
+    "hello",
+    "good morning",
+    "good evening",
+    "how are you",
+    "what's up",
+    "hey",
+    "greetings"
 ]
-sample_labels = [1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1]  # 1 for spam, 0 for ham
+sample_labels = [1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1,
+                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  # 1 for spam, 0 for ham
 
 def preprocess_message(message):
     message = re.sub(pattern='[^A-Za-z]', repl=' ', string=message)
