@@ -1,5 +1,4 @@
 flask
 nltk
 scikit-learn
-gunicorn
-psycopg2-binary
+pymongo

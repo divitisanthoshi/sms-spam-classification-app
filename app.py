@@ -1,20 +1,23 @@
 import re
 import os
-import sqlite3
-import psycopg2
-from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import nltk
+from pymongo import MongoClient
 
 nltk.download('stopwords')
 nltk.download('wordnet')
 
 app = Flask(__name__)
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///sms_spam.db')
+DATABASE_URL = os.getenv('DATABASE_URL', 'mongodb://localhost:27017/')
+
+# Initialize MongoDB client and database
+client = MongoClient(DATABASE_URL)
+db = client['sms_spam_db']
+collection = db['sms_messages']
 
 # Initialize lemmatizer and stopwords
 wnl = WordNetLemmatizer()
@@ -73,62 +76,9 @@ y_pred = model.predict(X_train)
 accuracy = accuracy_score(sample_labels, y_pred)
 print(f"Training accuracy: {accuracy:.2f}")
 
-# Database setup
-def init_db():
-    if DATABASE_URL.startswith('sqlite'):
-        conn = sqlite3.connect(DATABASE_URL.replace('sqlite:///', ''))
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS sms_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message TEXT NOT NULL,
-                prediction INTEGER NOT NULL
-            )
-        ''')
-        conn.commit()
-        conn.close()
-    else:
-        result = urlparse(DATABASE_URL)
-        conn = psycopg2.connect(
-            database=result.path[1:],
-            user=result.username,
-            password=result.password,
-            host=result.hostname,
-            port=result.port
-        )
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS sms_messages (
-                id SERIAL PRIMARY KEY,
-                message TEXT NOT NULL,
-                prediction INTEGER NOT NULL
-            )
-        ''')
-        conn.commit()
-        conn.close()
-
-init_db()
-
 def save_message_to_db(message, prediction):
-    if DATABASE_URL.startswith('sqlite'):
-        conn = sqlite3.connect(DATABASE_URL.replace('sqlite:///', ''))
-        c = conn.cursor()
-        c.execute('INSERT INTO sms_messages (message, prediction) VALUES (?, ?)', (message, prediction))
-        conn.commit()
-        conn.close()
-    else:
-        result = urlparse(DATABASE_URL)
-        conn = psycopg2.connect(
-            database=result.path[1:],
-            user=result.username,
-            password=result.password,
-            host=result.hostname,
-            port=result.port
-        )
-        c = conn.cursor()
-        c.execute('INSERT INTO sms_messages (message, prediction) VALUES (%s, %s)', (message, prediction))
-        conn.commit()
-        conn.close()
+    doc = {'message': message, 'prediction': int(prediction)}
+    collection.insert_one(doc)
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -136,49 +86,20 @@ def predict():
     if not data or 'message' not in data:
         return jsonify({'error': 'No message provided'}), 400
     message = data['message']
-    processed = preprocess_message(message)
-    features = tfidf.transform([processed]).toarray()
-    prediction = model.predict(features)[0]
-    save_message_to_db(message, int(prediction))
+    from model_improvement import predict_message
+    prediction = predict_message(message)
+    save_message_to_db(message, prediction)
     return jsonify({'prediction': 'spam' if prediction == 1 else 'ham'})
 
 @app.route('/messages', methods=['GET'])
 def get_messages():
-    if DATABASE_URL.startswith('sqlite'):
-        conn = sqlite3.connect(DATABASE_URL.replace('sqlite:///', ''))
-    else:
-        result = urlparse(DATABASE_URL)
-        conn = psycopg2.connect(
-            database=result.path[1:],
-            user=result.username,
-            password=result.password,
-            host=result.hostname,
-            port=result.port
-        )
-    c = conn.cursor()
-    c.execute('SELECT message, prediction FROM sms_messages ORDER BY id DESC LIMIT 10')
-    rows = c.fetchall()
-    conn.close()
-    messages = [{'message': row[0], 'prediction': 'spam' if row[1] == 1 else 'ham'} for row in rows]
+    cursor = collection.find().sort('_id', -1).limit(10)
+    messages = [{'message': doc['message'], 'prediction': 'spam' if doc['prediction'] == 1 else 'ham'} for doc in cursor]
     return jsonify(messages)
 
 @app.route('/clear_messages', methods=['POST'])
 def clear_messages():
-    if DATABASE_URL.startswith('sqlite'):
-        conn = sqlite3.connect(DATABASE_URL.replace('sqlite:///', ''))
-    else:
-        result = urlparse(DATABASE_URL)
-        conn = psycopg2.connect(
-            database=result.path[1:],
-            user=result.username,
-            password=result.password,
-            host=result.hostname,
-            port=result.port
-        )
-    c = conn.cursor()
-    c.execute('DELETE FROM sms_messages')
-    conn.commit()
-    conn.close()
+    collection.delete_many({})
     return jsonify({'message': 'All messages cleared successfully'})
 
 @app.route('/')

@@ -3,6 +3,8 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.ensemble import IsolationForest
+import numpy as np
 import nltk
 
 nltk.download('stopwords')
@@ -35,12 +37,17 @@ sample_messages = [
     "how are you",
     "what's up",
     "hey",
-    "greetings"
+    "greetings",
+    "Congratulations! You won a prize",
+    "Win a free ticket now",
+    "Claim your free prize",
+    "You have been selected for a reward"
 ]
 
 sample_labels = [
     1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1,
-    0, 0, 0, 0, 0, 0, 0, 0, 0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 1
 ]  # 1 for spam, 0 for ham
 
 def preprocess_message(message):
@@ -59,11 +66,24 @@ X_train = tfidf.fit_transform(processed_samples)
 model = MultinomialNB()
 model.fit(X_train, sample_labels)
 
-# Test the greetings
-test_messages = ["hi", "hai", "hy", "hello", "good morning", "free money", "win prize now"]
+# Anomaly detection model for adversarial or novel spam detection
+iso_forest = IsolationForest(contamination=0.1, random_state=42)
+iso_forest.fit(X_train.toarray())
+
+def predict_message(message):
+    processed = preprocess_message(message)
+    features = tfidf.transform([processed]).toarray()
+    prediction = model.predict(features)[0]
+    anomaly_score = iso_forest.decision_function(features)[0]
+    is_anomaly = iso_forest.predict(features)[0] == -1
+    # If anomaly detected, treat as spam (1)
+    if is_anomaly:
+        return 1
+    return prediction
+
+# Test the greetings and anomaly detection
+test_messages = ["hi", "hai", "hy", "hello", "good morning", "free money", "win prize now", "unknown spammy text"]
 
 for test_msg in test_messages:
-    processed_test = preprocess_message(test_msg)
-    features_test = tfidf.transform([processed_test]).toarray()
-    prediction_test = model.predict(features_test)[0]
-    print(f"Message: '{test_msg}' classified as: {'spam' if prediction_test == 1 else 'ham'}")
+    pred = predict_message(test_msg)
+    print(f"Message: '{test_msg}' classified as: {'spam' if pred == 1 else 'ham'}")
